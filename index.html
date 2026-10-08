@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpha | Neural Sign Language Engine</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a' },
+            dark: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- TensorFlow.js & Transfer Learning Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.2/dist/knn-classifier.min.js"></script>
+
+  <style>
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glow-accent {
+      box-shadow: 0 0 35px -5px rgba(59, 130, 246, 0.25);
+    }
+    #webcam-view {
+      transform: scaleX(-1);
+    }
+  </style>
+</head>
+<body class="bg-dark-950 text-slate-100 min-h-full flex flex-col font-sans selection:bg-blue-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-slate-800/80 bg-dark-900/80 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5 flex justify-between items-center">
+    <div class="flex items-center space-x-3.5">
+      <div class="bg-gradient-to-tr from-blue-600 to-indigo-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-bold tracking-tight text-white">ALPHA</h1>
+          <span class="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Enterprise AI</span>
+        </div>
+        <p class="text-xs text-slate-400">Real-Time Visual Gesture Translation Engine</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-4">
+      <div class="hidden sm:flex items-center gap-2 text-xs text-slate-400 bg-dark-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
+        <span id="status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="status-text">Loading Neural Weights...</span>
+      </div>
+      <span class="bg-slate-800 text-slate-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 shadow-sm">
+        Team Alpha
+      </span>
+    </div>
+  </header>
+
+  <!-- Dashboard Workspace Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    
+    <!-- LEFT PANEL: Visual Feeds & Controls (5 cols) -->
+    <section class="lg:col-span-5 flex flex-col gap-5">
+      
+      <!-- Input Source Selector & Display -->
+      <div class="glass-card rounded-2xl p-5 glow-accent space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            1. Visual Stream Feed
+          </h2>
+          <div class="flex gap-1 bg-dark-950 p-1 rounded-lg border border-slate-800">
+            <button id="mode-file-btn" type="button" onclick="switchMode('file')" class="text-[11px] font-medium px-2.5 py-1 rounded-md bg-blue-600 text-white transition-all">File</button>
+            <button id="mode-cam-btn" type="button" onclick="switchMode('cam')" class="text-[11px] font-medium px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition-all">Webcam</button>
+          </div>
+        </div>
+
+        <!-- Input Media Area -->
+        <div class="relative w-full aspect-video bg-dark-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+          
+          <!-- File Input Drag/Click Box -->
+          <div id="file-dropzone" onclick="document.getElementById('file-input').click()" class="cursor-pointer flex flex-col items-center justify-center p-4 text-center space-y-2 w-full h-full hover:bg-dark-900/50 transition-colors">
+            <input id="file-input" type="file" accept="image/*,video/*" class="hidden" onchange="loadFile(event)">
+            <div class="p-3 rounded-full bg-slate-800/80 text-blue-400">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+            </div>
+            <p class="text-xs text-slate-300 font-medium">Click to select gesture sample</p>
+            <p class="text-[10px] text-slate-500">PNG, JPG, MP4, MOV</p>
+          </div>
+
+          <!-- Dynamic Previews -->
+          <img id="image-preview" class="hidden absolute inset-0 w-full h-full object-contain p-2 bg-dark-950" alt="Gesture Sample Preview">
+          <video id="video-preview" class="hidden absolute inset-0 w-full h-full object-contain p-2 bg-dark-950" controls loop autoplay muted></video>
+          <video id="webcam-view" class="hidden absolute inset-0 w-full h-full object-cover" autoplay playsinline muted></video>
+        </div>
+      </div>
+
+      <!-- Dataset Collector Card -->
+      <div class="glass-card rounded-2xl p-5 space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            2. Feature Registration
+          </h2>
+        </div>
+
+        <!-- Class Register Grid -->
+        <div id="gesture-buttons-grid" class="grid grid-cols-2 gap-2.5">
+          <!-- Dynamic Buttons Rendered by JS -->
+        </div>
+
+        <!-- Add Custom Gesture Class -->
+        <div class="pt-2 flex gap-2">
+          <input id="custom-class-name" type="text" placeholder="New Gesture Name..." class="flex-1 bg-dark-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+          <button type="button" onclick="addCustomClass()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Storage Controls (Local & JSON Export/Import) -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col gap-2.5">
+        <div class="flex gap-2">
+          <button type="button" onclick="saveToLocalStorage()" class="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-semibold text-xs py-2 rounded-lg border border-blue-500/30 transition-all text-center">
+            💾 Save Model to Storage
+          </button>
+          <button type="button" onclick="clearLocalStorageModel()" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs px-3 py-2 rounded-lg border border-rose-500/20 transition-all text-center">
+            🗑️ Clear
+          </button>
+        </div>
+        <div class="flex gap-2 border-t border-slate-800 pt-2.5">
+          <button type="button" onclick="exportDataset()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium py-2 rounded-lg border border-slate-700 transition-all text-center">
+            Export JSON File
+          </button>
+          <button type="button" onclick="document.getElementById('import-input').click()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium py-2 rounded-lg border border-slate-700 transition-all text-center">
+            Import JSON File
+          </button>
+          <input id="import-input" type="file" accept=".json" class="hidden" onchange="importDataset(event)">
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Translation & Analytics (7 cols) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+      
+      <!-- Primary Translation Result Box -->
+      <div class="glass-card rounded-2xl p-6 glow-accent flex flex-col items-center text-center relative overflow-hidden">
+        <div class="absolute top-4 right-4 flex items-center gap-3">
+          <button type="button" onclick="testVoice()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 transition-all">
+            🔊 Test Voice
+          </button>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-400">
+            <input type="checkbox" id="tts-toggle" class="rounded border-slate-700 bg-dark-900 text-blue-600 focus:ring-0" checked>
+            <span>Voice Synthesizer</span>
+          </label>
+        </div>
+
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">3. Translated Gesture</span>
+        
+        <div id="gesture-output" class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 py-3 min-h-[72px] flex items-center justify-center">
+          Ready
+        </div>
+
+        <!-- Confidence Gauge Bar -->
+        <div class="w-full mt-4 space-y-1.5">
+          <div class="flex justify-between text-xs text-slate-400">
+            <span>Inference Confidence</span>
+            <span id="confidence-percentage" class="font-mono font-bold text-blue-400">0%</span>
+          </div>
+          <div class="w-full bg-dark-950 rounded-full h-3 p-0.5 border border-slate-800">
+            <div id="confidence-bar" class="bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Control Trigger Buttons -->
+      <div class="flex gap-3">
+        <button type="button" onclick="predictCurrentInput()" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-600/25 transition-all active:scale-[0.99] text-sm flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+          Run Single Prediction
+        </button>
+        <button type="button" id="continuous-btn" onclick="toggleContinuousInference()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3.5 px-5 rounded-xl border border-slate-700 text-sm transition-all">
+          Live Stream Mode
+        </button>
+      </div>
+
+      <!-- Real-Time Classification Diagnostics -->
+      <div class="glass-card rounded-2xl p-5 space-y-3">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Probability Metrics Breakdown</h3>
+        <div id="probability-list" class="space-y-2">
+          <p class="text-xs text-slate-500 italic">Metrics will render upon model evaluation.</p>
+        </div>
+      </div>
+
+      <!-- Diagnostic Telemetry Terminal -->
+      <div class="bg-dark-950/90 border border-slate-800 rounded-xl p-4 font-mono text-[11px] leading-relaxed text-slate-400">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-800 text-[10px] text-slate-500 uppercase tracking-wider">
+          <span>Engine Telemetry Log</span>
+          <span id="log-timestamp">00:00:00</span>
+        </div>
+        <p id="log-output" class="text-slate-300">$ Alpha Neural Core Initialized.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-slate-800/80 bg-dark-900/50 py-4 px-6 text-center text-xs text-slate-500">
+    &copy; 2026 Team Alpha. Proprietary Visual Translation Engine. All rights reserved.
+  </footer>
+
+  <script>
+    let mobilenetModel, classifier;
+    let classes = ["Hello", "Need Water", "Thank You", "Idle"];
+    let classCounts = { "Hello": 0, "Need Water": 0, "Thank You": 0, "Idle": 0 };
+    
+    let activeElement = null;
+    let currentMode = "file";
+    let isContinuous = false;
+    let webcamStream = null;
+    let lastSpokenText = "";
+    let lastSpokenTime = 0;
+
+    function logMessage(msg) {
+      const logEl = document.getElementById("log-output");
+      const timeEl = document.getElementById("log-timestamp");
+      logEl.innerText = `$ ${msg}`;
+      timeEl.innerText = new Date().toLocaleTimeString();
+    }
+
+    async function initAI() {
+      try {
+        logMessage("Initializing MobileNet Feature Extractor & KNN Engine...");
+        mobilenetModel = await mobilenet.load();
+        classifier = knnClassifier.create();
+        
+        renderGestureButtons();
+        
+        // Auto Load from LocalStorage if Data Exists
+        loadFromLocalStorage();
+
+        document.getElementById("status-text").innerText = "Engine Ready";
+        document.getElementById("status-dot").className = "w-2 h-2 rounded-full bg-emerald-400";
+      } catch (err) {
+        logMessage("Engine Initialization Error: " + err.message);
+        document.getElementById("status-text").innerText = "Error";
+        document.getElementById("status-dot").className = "w-2 h-2 rounded-full bg-rose-500";
+      }
+    }
+    initAI();
+
+    function renderGestureButtons() {
+      const grid = document.getElementById("gesture-buttons-grid");
+      grid.innerHTML = "";
+      classes.forEach(cls => {
+        if (classCounts[cls] === undefined) classCounts[cls] = 0;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.onclick = () => addExample(cls);
+        btn.className = "group p-3 rounded-xl bg-dark-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-blue-500/40 transition-all text-left flex justify-between items-center";
+        btn.innerHTML = `
+          <div>
+            <p class="text-xs font-semibold text-slate-200">${cls}</p>
+            <p class="text-[10px] text-slate-500">Register Sample</p>
+          </div>
+          <span id="count-${cls}" class="text-xs font-bold font-mono px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">${classCounts[cls]}</span>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    function addCustomClass() {
+      const input = document.getElementById("custom-class-name");
+      const val = input.value.trim();
+      if (val && !classes.includes(val)) {
+        classes.push(val);
+        classCounts[val] = 0;
+        renderGestureButtons();
+        input.value = "";
+        logMessage(`Added custom gesture class: "${val}"`);
+      }
+    }
+
+    async function switchMode(mode) {
+      currentMode = mode;
+      const fileBtn = document.getElementById("mode-file-btn");
+      const camBtn = document.getElementById("mode-cam-btn");
+      const dropzone = document.getElementById("file-dropzone");
+      const imgEl = document.getElementById("image-preview");
+      const videoEl = document.getElementById("video-preview");
+      const camEl = document.getElementById("webcam-view");
+
+      if (mode === "file") {
+        fileBtn.className = "text-[11px] font-medium px-2.5 py-1 rounded-md bg-blue-600 text-white transition-all";
+        camBtn.className = "text-[11px] font-medium px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition-all";
+        camEl.classList.add("hidden");
+        dropzone.classList.remove("hidden");
+        if (webcamStream) {
+          webcamStream.getTracks().forEach(track => track.stop());
+          webcamStream = null;
+        }
+        activeElement = imgEl.classList.contains("hidden") ? videoEl : imgEl;
+        logMessage("Switched to File Mode.");
+      } else {
+        camBtn.className = "text-[11px] font-medium px-2.5 py-1 rounded-md bg-blue-600 text-white transition-all";
+        fileBtn.className = "text-[11px] font-medium px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition-all";
+        dropzone.classList.add("hidden");
+        imgEl.classList.add("hidden");
+        videoEl.classList.add("hidden");
+
+        try {
+          webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          camEl.srcObject = webcamStream;
+          camEl.classList.remove("hidden");
+          activeElement = camEl;
+          logMessage("Webcam Feed Active.");
+        } catch (err) {
+          alert("Webcam Access Denied or Unavailable.");
+          switchMode("file");
+        }
+      }
+    }
+
+    function loadFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const imgEl = document.getElementById("image-preview");
+      const videoEl = document.getElementById("video-preview");
+      const dropzone = document.getElementById("file-dropzone");
+
+      dropzone.classList.add("hidden");
+      const fileURL = URL.createObjectURL(file);
+
+      if (file.type.startsWith("image/")) {
+        videoEl.classList.add("hidden");
+        videoEl.pause();
+        imgEl.src = fileURL;
+        imgEl.classList.remove("hidden");
+        activeElement = imgEl;
+        logMessage(`Loaded Image: ${file.name}`);
+      } else if (file.type.startsWith("video/")) {
+        imgEl.classList.add("hidden");
+        videoEl.src = fileURL;
+        videoEl.classList.remove("hidden");
+        videoEl.play();
+        activeElement = videoEl;
+        logMessage(`Loaded Video: ${file.name}`);
+      }
+    }
+
+    async function addExample(label) {
+      if (!mobilenetModel || !classifier) {
+        alert("AI Engine initializing. Please wait.");
+        return;
+      }
+      if (!activeElement || (currentMode === "file" && activeElement.id === "file-dropzone")) {
+        alert("Please load an image/video or enable webcam first.");
+        return;
+      }
+
+      const activation = mobilenetModel.infer(activeElement, 'conv_preds');
+      classifier.addExample(activation, label);
+
+      classCounts[label]++;
+      document.getElementById(`count-${label}`).innerText = classCounts[label];
+      logMessage(`Extracted features into label: "${label}"`);
+
+      // Auto-save to LocalStorage
+      saveToLocalStorage(false);
+    }
+
+    // -----------------------------------------------------------------
+    // VOICE SYNTHESIZER (TEXT-TO-SPEECH) ENGINE
+    // -----------------------------------------------------------------
+
+    function speakText(text) {
+      const ttsEnabled = document.getElementById("tts-toggle").checked;
+      if (!ttsEnabled) return;
+
+      const cleanText = String(text || '').trim();
+      if (!cleanText || cleanText.toLowerCase() === "idle" || cleanText.toLowerCase() === "ready") {
+        return;
+      }
+
+      // Prevent constant repeating speech in Live Loop (2 second cooldown for same gesture)
+      const now = Date.now();
+      if (cleanText === lastSpokenText && (now - lastSpokenTime) < 2000) {
+        return;
+      }
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop ongoing speech
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.lang = 'en-US';
+
+        lastSpokenText = cleanText;
+        lastSpokenTime = now;
+
+        window.speechSynthesis.speak(utterance);
+        logMessage(`Voice Output: "${cleanText}"`);
+      } else {
+        logMessage("Browser does not support Speech Synthesis.");
+      }
+    }
+
+    function testVoice() {
+      speakText("Hello! Voice synthesizer is working perfectly.");
+    }
+
+    // Unlock Chrome/Edge autoplay restriction on first user click
+    document.addEventListener('click', () => {
+      if ('speechSynthesis' in window && !window.speechSynthesis.speaking) {
+        const unlockUtterance = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(unlockUtterance);
+      }
+    }, { once: true });
+
+    async function predictCurrentInput() {
+      if (!classifier || classifier.getNumClasses() === 0) {
+        alert("Please train at least one sample first!");
+        return;
+      }
+      if (!activeElement) {
+        alert("Select an input stream or file.");
+        return;
+      }
+
+      const activation = mobilenetModel.infer(activeElement, 'conv_preds');
+      const result = await classifier.predictClass(activation);
+
+      const topClass = result.label;
+      const confidence = (result.confidences[topClass] * 100).toFixed(0);
+
+      document.getElementById("gesture-output").innerText = topClass;
+      document.getElementById("confidence-percentage").innerText = confidence + "%";
+      document.getElementById("confidence-bar").style.width = confidence + "%";
+
+      const probList = document.getElementById("probability-list");
+      probList.innerHTML = "";
+      Object.keys(result.confidences).forEach(cls => {
+        const probPct = (result.confidences[cls] * 100).toFixed(0);
+        const div = document.createElement("div");
+        div.className = "flex justify-between items-center text-xs bg-dark-900/60 px-3 py-2 rounded-lg border border-slate-800/80";
+        div.innerHTML = `<span class="text-slate-300 font-medium">${cls}</span><span class="font-mono text-blue-400 font-semibold">${probPct}%</span>`;
+        probList.appendChild(div);
+      });
+
+      speakText(topClass);
+      logMessage(`Prediction: "${topClass}" (${confidence}% match)`);
+    }
+
+    function toggleContinuousInference() {
+      const btn = document.getElementById("continuous-btn");
+      isContinuous = !isContinuous;
+      if (isContinuous) {
+        btn.className = "bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-5 rounded-xl border border-emerald-500 text-sm transition-all";
+        btn.innerText = "Stop Live Stream Mode";
+        loopInference();
+      } else {
+        btn.className = "bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3.5 px-5 rounded-xl border border-slate-700 text-sm transition-all";
+        btn.innerText = "Live Stream Mode";
+      }
+    }
+
+    async function loopInference() {
+      if (isContinuous) {
+        await predictCurrentInput();
+        requestAnimationFrame(loopInference);
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // LOCAL STORAGE PERSISTENCE LOGIC
+    // -----------------------------------------------------------------
+
+    function saveToLocalStorage(showAlert = true) {
+      if (!classifier || classifier.getNumClasses() === 0) {
+        if (showAlert) alert("No trained dataset to save.");
+        return;
+      }
+
+      const dataset = classifier.getClassifierDataset();
+      const datasetObj = {};
+      
+      Object.keys(dataset).forEach(key => {
+        const data = dataset[key].dataSync();
+        datasetObj[key] = Array.from(data);
+      });
+
+      const payload = {
+        classes: classes,
+        classCounts: classCounts,
+        dataset: datasetObj
+      };
+
+      try {
+        localStorage.setItem("alpha_gesture_model", JSON.stringify(payload));
+        if (showAlert) {
+          alert("Trained Model successfully saved to LocalStorage!");
+          logMessage("Model manually saved to LocalStorage.");
+        }
+      } catch (err) {
+        logMessage("LocalStorage quota exceeded or error: " + err.message);
+      }
+    }
+
+    function loadFromLocalStorage() {
+      const savedData = localStorage.getItem("alpha_gesture_model");
+      if (!savedData) {
+        logMessage("No pre-saved model found in LocalStorage.");
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(savedData);
+        classes = payload.classes || classes;
+        classCounts = payload.classCounts || classCounts;
+
+        const tensorDataset = {};
+        Object.keys(payload.dataset).forEach(key => {
+          tensorDataset[key] = tf.tensor(payload.dataset[key], [payload.dataset[key].length / 1024, 1024]);
+        });
+
+        classifier.setClassifierDataset(tensorDataset);
+        renderGestureButtons();
+        logMessage("Pre-trained model automatically restored from LocalStorage!");
+      } catch (err) {
+        logMessage("Error restoring saved model: " + err.message);
+      }
+    }
+
+    function clearLocalStorageModel() {
+      if (confirm("Are you sure you want to clear the saved model? All trained samples will be lost!")) {
+        localStorage.removeItem("alpha_gesture_model");
+        classifier.clearAllClasses();
+        classes = ["Hello", "Need Water", "Thank You", "Idle"];
+        classCounts = { "Hello": 0, "Need Water": 0, "Thank You": 0, "Idle": 0 };
+        renderGestureButtons();
+        logMessage("LocalStorage model cleared. Classifier reset.");
+        alert("Saved model cleared!");
+      }
+    }
+
+    function exportDataset() {
+      if (!classifier || classifier.getNumClasses() === 0) {
+        alert("No training dataset available to export.");
+        return;
+      }
+      const dataset = classifier.getClassifierDataset();
+      const datasetObj = {};
+      Object.keys(dataset).forEach(key => {
+        const data = dataset[key].dataSync();
+        datasetObj[key] = Array.from(data);
+      });
+
+      const payload = {
+        classes: classes,
+        classCounts: classCounts,
+        dataset: datasetObj
+      };
+
+      const jsonStr = JSON.stringify(payload);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "alpha_sign_dataset.json";
+      a.click();
+      logMessage("Dataset exported successfully.");
+    }
+
+    function importDataset(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const payload = JSON.parse(e.target.result);
+          
+          if (payload.dataset) {
+            classes = payload.classes || classes;
+            classCounts = payload.classCounts || classCounts;
+            
+            const tensorDataset = {};
+            Object.keys(payload.dataset).forEach(key => {
+              tensorDataset[key] = tf.tensor(payload.dataset[key], [payload.dataset[key].length / 1024, 1024]);
+            });
+            classifier.setClassifierDataset(tensorDataset);
+          } else {
+            const tensorDataset = {};
+            Object.keys(payload).forEach(key => {
+              tensorDataset[key] = tf.tensor(payload[key], [payload[key].length / 1024, 1024]);
+            });
+            classifier.setClassifierDataset(tensorDataset);
+          }
+
+          renderGestureButtons();
+          saveToLocalStorage(false);
+          logMessage("Dataset imported and saved to LocalStorage.");
+          alert("Dataset imported successfully!");
+        } catch (err) {
+          alert("Invalid Dataset File.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
