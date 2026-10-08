@@ -39,7 +39,7 @@ No heavy installation or backend configuration is required! ALPHA runs directly 
 
 ### **1. Clone the Repository**
 ```bash
-git clone [https://github.com/your-username/alpha-sign-language.git](https://github.com/your-username/alpha-sign-language.git)
+git clone [https://github.com/kushalmishra13/alpha-sign-language.git]([https://github.com/your-username/alpha-sign-language.git](https://github.com/kushalmishra13/AI-Lab-Project))
 cd alpha-sign-language
 
 2. Launch the Application
@@ -67,7 +67,7 @@ Voice Synthesizer: Ensure Voice Synthesizer is enabled to hear instant spoken tr
 
 Save & Export: Click Save Model to Storage to retain training locally, or Export JSON File to share the trained model dataset.
 
-🙏 Acknowledgment
+## 🙏 Acknowledgment
 We express our sincere gratitude and deep appreciation to our faculty mentor and project guide, Ms. Anjali Srivastava, for her valuable guidance, constant encouragement, and insightful feedback throughout the conceptualization and development of ALPHA. Her technical mentorship and support were instrumental in successfully realizing this project.
 
 We also acknowledge the open-source machine learning community and the creators of TensorFlow.js and MobileNet for providing the foundational infrastructure that made real-time client-side inferencing possible.
@@ -89,7 +89,3 @@ Designed and developed the user interface using HTML5 & Tailwind CSS.
 
 Built the responsive dashboard layout, glassmorphism design system, and real-time visual telemetry feedback widgets.
 
-Managed UI states, interaction controls, and user experience flows.
-
-📄 License
-This project is open-source and available under the MIT License.
